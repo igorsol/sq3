@@ -1,7 +1,13 @@
 #pragma once
 
 //atl
+#if defined(_WTL_NO_CSTRING)
 #include <atlstr.h>
+#else
+#include <atlbase.h>
+#include <atlapp.h>
+#include <atlmisc.h>
+#endif
 
 //additional 
 #include <sqlite3.h>
@@ -38,6 +44,9 @@ namespace sq3
 #define MAKEUTF8(x)	\
 	CT2A u8##x(x,CP_UTF8);
 #else
+
+#if 0
+// этот вариант вызывает проблемы, когда sq3.h включен в несколько исходников (функция utilUTF8 определена в нескольких модулях)
 	void utilUTF8(LPCTSTR src,LPSTR dst,int u8len)
 	{
 #if !defined(_UNICODE)
@@ -57,7 +66,83 @@ namespace sq3
 		utilUTF8(x,u8##x,u8len);	\
 	}
 
+#else
+// с помощью вспомогательного класса, аналогичного CT2A
+class CA2UTF8
+{
+public:
+	CA2UTF8(LPCSTR psz):m_psz(NULL)
+	{
+		_bstr_t bstrtmp(psz);
+		LPCWSTR widetmp=bstrtmp;
+		int cbutf=::WideCharToMultiByte(CP_UTF8,0,widetmp,-1,NULL,0,NULL,NULL);
+		m_psz=new CHAR[cbutf];
+		if(m_psz)
+			::WideCharToMultiByte(CP_UTF8,0,widetmp,-1,m_psz,cbutf,NULL,NULL);
+	}
+
+	~CA2UTF8() throw()
+	{
+		if(m_psz)
+			delete[]m_psz;
+	}
+
+	operator LPSTR() const throw()
+	{
+		return( m_psz );
+	}
+
+	LPSTR m_psz;
+
+private:	// запрет некоторых операций
+	CA2UTF8( const CA2UTF8& ) throw();
+	CA2UTF8& operator=( const CA2UTF8& ) throw();
+};
+
+#define MAKEUTF8(x) \
+	CA2UTF8 u8##x(x);
+
 #endif
+
+#endif
+
+
+	// вспомогательные средства для конвертации UTF8 в CString
+	// полезно в тех случаях, когда недоступен класс CA2CT(x,CP_UTF8)
+	class CUTF82T
+	{
+	public:
+		CUTF82T(LPCSTR u8):m_psz(NULL)
+		{
+			int len=strlen(u8)+1;
+#if defined(_UNICODE)
+			m_psz=new TCHAR[len];
+			MultiByteToWideChar(CP_UTF8,0,u8,-1,m_psz,len);
+#else
+			LPWSTR r=LPWSTR(_alloca(len*2));
+			MultiByteToWideChar(CP_UTF8,0,u8,-1,r,len);
+			m_psz=new TCHAR[len];
+			WideCharToMultiByte(CP_ACP,0,r,-1,m_psz,len,NULL,NULL);
+#endif
+		}
+
+		~CUTF82T() throw()
+		{
+			if(m_psz)
+				delete[]m_psz;
+		}
+
+		operator LPTSTR() const throw()
+		{
+			return( m_psz );
+		}
+
+		LPTSTR m_psz;
+
+	private:	// запрет некоторых операций
+		CUTF82T( const CUTF82T& ) throw();
+		CUTF82T& operator=( const CUTF82T& ) throw();
+	};
 
 	class connection
 	{
@@ -126,7 +211,8 @@ namespace sq3
 			check(sqlite3_bind_double(stmt,p,v));
 		}
 		void bind(int p,LPCSTR v){
-			check(sqlite3_bind_text(stmt,p,v,-1,SQLITE_STATIC));
+			MAKEUTF8(v);
+			check(sqlite3_bind_text(stmt,p,u8v,-1,SQLITE_STATIC));
 		}
 		void bind(int p,LPCWSTR v){
 			check(sqlite3_bind_text16(stmt,p,v,-1,SQLITE_STATIC));
