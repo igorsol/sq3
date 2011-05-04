@@ -1,7 +1,7 @@
 #pragma once
 
 //atl
-#if defined(_WTL_NO_CSTRING)
+#if (_ATL_VER >= 0x0700)
 #include <atlstr.h>
 #else
 #include <atlbase.h>
@@ -210,13 +210,16 @@ private:	// запрет некоторых операций
 		void bind(int p,double v){
 			check(sqlite3_bind_double(stmt,p,v));
 		}
+#if defined(_UNICODE)
+		void bind(int p,LPCWSTR v){
+			check(sqlite3_bind_text16(stmt,p,v,-1,SQLITE_STATIC));
+		}
+#else
 		void bind(int p,LPCSTR v){
 			MAKEUTF8(v);
 			check(sqlite3_bind_text(stmt,p,u8v,-1,SQLITE_STATIC));
 		}
-		void bind(int p,LPCWSTR v){
-			check(sqlite3_bind_text16(stmt,p,v,-1,SQLITE_STATIC));
-		}
+#endif
 		void bind(int p,const void*pdata,int n){
 			check(sqlite3_bind_blob(stmt,p,pdata,n,SQLITE_STATIC));
 		}
