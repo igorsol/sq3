@@ -1,2 +1,2 @@
-c++ shell for sqlite library
+simple c++ wrapper for sqlite library
 environment: microsoft vs 6.0, vs 2008
